@@ -123,6 +123,19 @@ class Builder
 	}
 
 	/**
+	 * Insert a divider after the item.
+	 *
+	 * @param  array  $attributes
+	 * @return void
+	 */
+	public function divide($attributes = array())
+	{
+		$attributes['class'] = self::formatGroupClass(['class' => 'divider'], $attributes);
+
+		$this->items->last()->divider = $attributes;
+	}
+
+	/**
 	 * Return the configuration value by key.
 	 *
 	 * @param  string  $key
@@ -131,21 +144,6 @@ class Builder
 	public function config($key)
 	{
 		return $this->config[$key];
-	}
-
-	/**
-	 * Returns all items with no parents.
-	 *
-	 * @return \Illuminate\Support\Collection
-	 */
-	public function roots()
-	{
-		return $this->whereParent();
-	}
-
-	public function test()
-	{
-		return 'asdf';
 	}
 
 	/**
@@ -174,6 +172,254 @@ class Builder
 		}
 
 		return array_get($old, 'class');
+	}
+
+	/*
+	|--------------------------------------------------------------------------
+	| Fetching Methods
+	|--------------------------------------------------------------------------
+	|
+	*/
+
+	/**
+	 * Fetches and returns all menu itemss.
+	 *
+	 * @return Collection
+	 */
+	public function all()
+	{
+		return $this->items;
+	}
+
+	/**
+	 * Returns all items with no parents.
+	 *
+	 * @return Collection
+	 */
+	public function roots()
+	{
+		return $this->whereParent();
+	}
+
+	/**
+	 * Fetches and returns a menu item by it's slug.
+	 *
+	 * @param  string  $slug
+	 * @return Item
+	 */
+	public function get($slug)
+	{
+		return $this->whereSlug($slug)->first();
+	}
+
+	/**
+	 * Facade method for the get() method.
+	 *
+	 * @param  string  $slug
+	 * @return Item
+	 */
+	public function item($slug)
+	{
+		return $this->get($slug);
+	}
+
+	/**
+	 * Fetches and returns a menu item by it's ID.
+	 *
+	 * @param  integer  $id
+	 * @return Item
+	 */
+	public function find($id)
+	{
+		return $this->whereId($id)->first();
+	}
+
+	/**
+	 * Fetches and returns the first menu item.
+	 *
+	 * @return Item
+	 */
+	public function first()
+	{
+		return $this->items->first();
+	}
+
+	/**
+	 * Fetches and returns the last menu item.
+	 *
+	 * @return Item
+	 */
+	public function last()
+	{
+		return $this->items->last();
+	}
+
+	/**
+	 * Fetches and returns all active state menu items.
+	 *
+	 * @return Collection
+	 */
+	public function active()
+	{
+		$activeItems = array();
+
+		foreach ($this->items as $item) {
+			if ($item->data('active')) {
+				$activeItems[] = $item;
+			}
+		}
+
+		return $activeItems;
+	}
+
+	/*
+	|--------------------------------------------------------------------------
+	| Dispatch Methods
+	|--------------------------------------------------------------------------
+	|
+	*/
+
+	/**
+	 * Get the action type from the options.
+	 *
+	 * @param  array  $options
+	 * @return string
+	 */
+	public function dispatch($options)
+	{
+		if (isset($options['url'])) {
+			return $this->getUrl($options);
+		} elseif (isset($options['route'])) {
+			return $this->getRoute($options['route']);
+		} elseif (isset($options['action'])) {
+			return $this->getAction($options['action']);
+		}
+
+		return null;
+	}
+
+	/**
+	 * Get the action for a "url" option.
+	 *
+	 * @param  array|string  $options
+	 * @return string
+	 */
+	protected function getUrl($options)
+	{
+		foreach ($options as $key => $value) {
+			$$key = $value;
+		}
+
+		$secure = (isset($options['secure']) and $options['secure'] === true) ? true : false;
+
+		if (is_array($url)) {
+			if (self::isAbsolute($url[0])) {
+				return $url[0];
+			}
+
+			return $this->url->to($prefix.'/'.$url[0], array_slice($url, 1), $secure);
+		}
+
+		if (self::isAbsolute($url)) {
+			return $url;
+		}
+
+		return $this->url->to($prefix.'/'.$url, array(), $secure);
+	}
+
+	/**
+	 * Get the route action for a "route" option.
+	 *
+	 * @param  array|string  $route
+	 * @return string
+	 */
+	protected function getRoute($route)
+	{
+		if (is_array($route)) {
+			return $this->url->route($route[0], array_slice($route, 1));
+		}
+
+		return $this->url->route($route);
+	}
+
+	/**
+	 * Get the controller action for a "action" option.
+	 *
+	 * @param  array|string  $action
+	 * @return string
+	 */
+	protected function getAction($action)
+	{
+		if (is_array($action)) {
+			return $this->url->action($action[0], array_slice($action, 1));
+		}
+
+		return $this->url->action($action);
+	}
+
+	/**
+	 * Determines if the given URL is absolute.
+	 *
+	 * @param  string  $url
+	 * @return bool
+	 */
+	public static function isAbsolute($url)
+	{
+		return parse_url($url, PHP_URL_SCHEME) or false;
+	}
+
+	/*
+	|--------------------------------------------------------------------------
+	| Filter Methods
+	|--------------------------------------------------------------------------
+	|
+	*/
+
+	/**
+	 * Filter menu items through a callback.
+	 *
+	 * Since menu items are stored as a collection, this will
+	 * simply forward the callback to the Laravel Collection
+	 * filter() method and return the results.
+	 *
+	 * @param  callable  $callback
+	 * @return Builder
+	 */
+	public function filter($callback)
+	{
+		if (is_callable($callback)) {
+			$this->items = $this->items->filter($callback);
+		}
+
+		return $this;
+	}
+
+	/**
+	 * Filter menu items recursively.
+	 *
+	 * @param  string  $attribute
+	 * @param  mixed   $value
+	 * @return Collection
+	 */
+	public function filterRecursively($attribute, $value)
+	{
+		$collection = new Collection;
+
+		$this->items->each(function($item) use ($attribute, $value, &$collection) {
+			if (! property_exists($item, $attribute)) {
+				return $false;
+			}
+
+			if ($item->$attribute == $value) {
+				$collection->push($item);
+
+				if ($item->hasChildren()) {
+					$collection = $collection->merge($this->filterRecursively($attribute, $item->id));
+				}
+			}
+		});
+
+		return $collection;
 	}
 
 	/**
@@ -215,72 +461,6 @@ class Builder
 
 	/*
 	|--------------------------------------------------------------------------
-	| Dispatch Methods
-	|--------------------------------------------------------------------------
-	|
-	*/
-
-	/**
-	 * Get the action type from the options.
-	 *
-	 * @param  array  $options
-	 * @return string
-	 */
-	public function dispatch($options)
-	{
-		if (isset($options['url'])) {
-			return $this->getUrl($options);
-		} elseif (isset($options['route'])) {
-			return $this->url->route($options['route']);
-		} elseif (isset($options['action'])) {
-			return $this->url->action($options['action']);
-		}
-
-		return null;
-	}
-
-	/**
-	 * Get the action for a "url" option.
-	 *
-	 * @param  array|string  $options
-	 * @return string
-	 */
-	protected function getUrl($options)
-	{
-		foreach ($options as $key => $value) {
-			$$key = $value;
-		}
-
-		$secure = (isset($options['secure']) and $options['secure'] === true) ? true : false;
-
-		if (is_array($url)) {
-			if (self::isAbs($url[0])) {
-				return $url[0];
-			}
-
-			return $this->url->to($prefix.'/'.$url[0], array_slice($url, 1), $secure);
-		}
-
-		if (self::isAbs($url)) {
-			return $url;
-		}
-
-		return $this->url->to($prefix.'/'.$url, array(), $secure);
-	}
-
-	/**
-	 * Determines if the given URL is absolute.
-	 *
-	 * @param  string  $url
-	 * @return bool
-	 */
-	public static function isAbs($url)
-	{
-		return parse_url($url, PHP_URL_SCHEME) or false;
-	}
-
-	/*
-	|--------------------------------------------------------------------------
 	| Rendering Methods
 	|--------------------------------------------------------------------------
 	|
@@ -310,7 +490,7 @@ class Builder
 		$itemTag = in_array($type, ['ul', 'ol']) ? 'li' : $type;
 
 		foreach ($this->whereParent($parent) as $item) {
-			$items .= "<{$itemTag}{$this->attributes($item->attributes())}>";
+			$items .= "<{$itemTag}{$item->attributes()}>";
 
 			if ($item->link) {
 				$items .= "<a{$this->attributes($item->link->attr())} href=\"{$item->url()}\">{$item->title}</a>";
@@ -327,7 +507,7 @@ class Builder
 			$items .= "</{$itemTag}>";
 
 			if ($item->divider) {
-				$items .= "<{$item_tag}{$this->attributes($item->divider)}></{$item_tag}>";
+				$items .= "<{$itemTag}{$this->attributes($item->divider)}></{$itemTag}>";
 			}
 		}
 
@@ -355,7 +535,7 @@ class Builder
 		$recursive = isset($args[1]) ? $args[1] : false;
 
 		if ($recursive) {
-			return $this->filterRecursive($attribute, $value);
+			return $this->filterRecursively($attribute, $value);
 		}
 
 		return $this->items->filter(function($item) use ($attribute, $value) {
